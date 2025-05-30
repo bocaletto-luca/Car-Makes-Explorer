@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Car Explorer - Simplified</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    body {
+      padding-top: 20px;
+      background-color: #f8f9fa;
+    }
+    header {
+      margin-bottom: 30px;
+    }
+    /* Le card avranno un layout uniforme con solo testo */
+    .card {
+      cursor: pointer;
+      margin-bottom: 15px;
+    }
+    .card .card-body {
+      min-height: 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .pagination {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header class="text-center">
+    <h1>Car Explorer - Simplified</h1>
+    <p class="lead">Explore car makes and models (text only) using the NHTSA API.</p>
+  </header>
+
+  <!-- SEARCH & FILTER -->
+  <div class="mb-3">
+    <input type="text" id="searchInput" class="form-control" placeholder="Search car makes...">
+  </div>
+  <div class="text-center mb-3">
+    <button class="btn btn-outline-primary mx-1" onclick="changeCategory('all')">All</button>
+    <button class="btn btn-outline-primary mx-1" onclick="changeCategory('A-F')">A–F</button>
+    <button class="btn btn-outline-primary mx-1" onclick="changeCategory('G-M')">G–M</button>
+    <button class="btn btn-outline-primary mx-1" onclick="changeCategory('N-T')">N–T</button>
+    <button class="btn btn-outline-primary mx-1" onclick="changeCategory('U-Z')">U–Z</button>
+  </div>
+
+  <!-- MAKES CONTAINER -->
+  <div id="makesContainer" class="row"></div>
+
+  <!-- MAKES PAGINATION -->
+  <nav>
+    <ul id="pagination" class="pagination justify-content-center"></ul>
+  </nav>
+</div>
+
+<!-- MODAL: MAKE DETAILS (Testo Only) -->
+<div class="modal fade" id="makeModal" tabindex="-1" aria-labelledby="makeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="makeModalLabel">Car Make Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="makeModalBody">
+        <!-- I dettagli verranno inseriti qui in forma testuale -->
+      </div>
+      <div class="modal-footer">
+        <button id="viewModelsBtn" type="button" class="btn btn-primary">View Models</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MODELS (Testo Only) -->
+<div class="modal fade" id="modelsModal" tabindex="-1" aria-labelledby="modelsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modelsModalLabel">Car Models</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="modelsModalBody">
+        <!-- L'elenco dei modelli verrà inserito qui -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap Bundle JS (with Popper) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // VARIABILI GLOBALI
+  let allMakes = [];
+  let filteredMakes = [];
+  let currentPage = 1;
+  const makesPerPage = 20;
+  let currentCategory = "all";  // Possibili valori: "all", "A-F", "G-M", "N-T", "U-Z"
+
+  // Riferimenti DOM
+  const makesContainer = document.getElementById("makesContainer");
+  const paginationContainer = document.getElementById("pagination");
+  const searchInput = document.getElementById("searchInput");
+
+  // Modal for make details
+  const makeModal = new bootstrap.Modal(document.getElementById("makeModal"));
+  const makeModalLabel = document.getElementById("makeModalLabel");
+  const makeModalBody = document.getElementById("makeModalBody");
+  const viewModelsBtn = document.getElementById("viewModelsBtn");
+
+  let currentMakeSelected = null;
+
+  // FUNZIONE: Fetch car makes dalla NHTSA API
+  async function fetchCarMakes() {
+    try {
+      const response = await fetch("https://vpic.nhtsa.dot.gov/api/vehicles/GetAllMakes?format=json", {
+        headers: { Accept: "application/json" }
+      });
+      if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+      const data = await response.json();
+      allMakes = data.Results || data.results || [];
+      console.log("Car makes count:", allMakes.length);
+      applyFilters();
+    } catch(error) {
+      console.error("Error fetching car makes:", error);
+      makesContainer.innerHTML = `<div class="alert alert-danger">Error fetching car makes: ${error.message}</div>`;
+    }
+  }
+
+  fetchCarMakes();
+
+  // FUNZIONE: Determina il gruppo di categoria in base alla prima lettera
+  function getCategoryGroup(name) {
+    const first = name[0].toUpperCase();
+    if (first >= "A" && first <= "F") return "A-F";
+    if (first >= "G" && first <= "M") return "G-M";
+    if (first >= "N" && first <= "T") return "N-T";
+    return "U-Z";
+  }
+
+  // FUNZIONE: Applica filtri (ricerca e categoria)
+  function applyFilters() {
+    const term = searchInput.value.trim().toLowerCase();
+    filteredMakes = allMakes.filter(make => {
+      const matchesSearch = make.Make_Name.toLowerCase().includes(term);
+      const matchesCategory = (currentCategory === "all") || (getCategoryGroup(make.Make_Name) === currentCategory);
+      return matchesSearch && matchesCategory;
+    });
+    console.log("Filtered makes count:", filteredMakes.length);
+    currentPage = 1;
+    displayMakes();
+    setupPagination();
+  }
+
+  searchInput.addEventListener("input", applyFilters);
+
+  // FUNZIONE: Cambia categoria in base al pulsante cliccato
+  function changeCategory(category) {
+    currentCategory = category;
+    applyFilters();
+  }
+
+  // FUNZIONE: Visualizza i car makes in layout di card (solo testo)
+  function displayMakes() {
+    makesContainer.innerHTML = "";
+    if (filteredMakes.length === 0) {
+      makesContainer.innerHTML = '<div class="text-center">No car makes found.</div>';
+      return;
+    }
+    const start = (currentPage - 1) * makesPerPage;
+    const pageMakes = filteredMakes.slice(start, start + makesPerPage);
+    pageMakes.forEach(make => {
+      const col = document.createElement("div");
+      col.className = "col-md-3 mb-3";
+
+      const card = document.createElement("div");
+      card.className = "card h-100";
+      card.onclick = () => showMakeDetails(make);
+
+      const cardBody = document.createElement("div");
+      cardBody.className = "card-body text-center";
+
+      const title = document.createElement("h5");
+      title.className = "card-title";
+      title.textContent = make.Make_Name;
+      cardBody.appendChild(title);
+
+      const idText = document.createElement("p");
+      idText.className = "card-text";
+      idText.innerHTML = `<small>ID: ${make.Make_ID}</small>`;
+      cardBody.appendChild(idText);
+
+      card.appendChild(cardBody);
+      col.appendChild(card);
+      makesContainer.appendChild(col);
+    });
+  }
+
+  // FUNZIONE: Visualizza la paginazione per i car makes
+  function setupPagination() {
+    paginationContainer.innerHTML = "";
+    const totalPages = Math.ceil(filteredMakes.length / makesPerPage);
+    // Bottone "Previous"
+    const liPrev = document.createElement("li");
+    liPrev.className = "page-item" + (currentPage === 1 ? " disabled" : "");
+    liPrev.innerHTML = `<a class="page-link" href="#">Previous</a>`;
+    liPrev.onclick = (e) => {
+      e.preventDefault();
+      if (currentPage > 1) {
+        currentPage--;
+        displayMakes();
+        setupPagination();
+      }
+    };
+    paginationContainer.appendChild(liPrev);
+    
+    // Indicatore della pagina corrente
+    const liCurrent = document.createElement("li");
+    liCurrent.className = "page-item active";
+    liCurrent.innerHTML = `<span class="page-link">${currentPage}</span>`;
+    paginationContainer.appendChild(liCurrent);
+
+    // Bottone "Next"
+    const liNext = document.createElement("li");
+    liNext.className = "page-item" + (currentPage === totalPages ? " disabled" : "");
+    liNext.innerHTML = `<a class="page-link" href="#">Next</a>`;
+    liNext.onclick = (e) => {
+      e.preventDefault();
+      if (currentPage < totalPages) {
+        currentPage++;
+        displayMakes();
+        setupPagination();
+      }
+    };
+    paginationContainer.appendChild(liNext);
+  }
+
+  // FUNZIONE: Mostra i dettagli del car make in una modal (solo testo)
+  function showMakeDetails(make) {
+    currentMakeSelected = make;
+    makeModalLabel.textContent = make.Make_Name + " Details";
+    let content = "";
+    content += `<p><strong>ID:</strong> ${make.Make_ID}</p>`;
+    content += `<p><strong>Name:</strong> ${make.Make_Name}</p>`;
+    content += `<p><strong>Category Group:</strong> ${getCategoryGroup(make.Make_Name)}</p>`;
+    makeModalBody.innerHTML = content;
+    viewModelsBtn.onclick = () => viewModels(make.Make_Name);
+    makeModal.show();
+  }
+
+  // FUNZIONE: Recupera e visualizza i car models per il make selezionato
+  async function viewModels(makeName) {
+    try {
+      const url = `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/${encodeURIComponent(makeName)}?format=json`;
+      console.log("Fetching models from:", url);
+      const response = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+      const data = await response.json();
+      const models = data.Results || data.results || [];
+      if (!Array.isArray(models)) throw new Error("Unexpected models format");
+      showModelsModal(makeName, models);
+    } catch (error) {
+      console.error("Error fetching car models:", error);
+      alert("Error fetching car models: " + error.message);
+    }
+  }
+
+  function showModelsModal(makeName, models) {
+    let content = "";
+    if (models.length === 0) {
+      content = "<p>No models found for this make.</p>";
+    } else {
+      content = `<ul class="list-group">`;
+      models.forEach(model => {
+        content += `<li class="list-group-item">${model.Model_Name} (Make: ${model.Make_Name})</li>`;
+      });
+      content += "</ul>";
+    }
+    document.getElementById("modelsModalLabel").textContent = "Models for: " + makeName;
+    document.getElementById("modelsModalBody").innerHTML = content;
+    const modelsModal = new bootstrap.Modal(document.getElementById("modelsModal"));
+    modelsModal.show();
+  }
+
+</script>
+</body>
+</html>
