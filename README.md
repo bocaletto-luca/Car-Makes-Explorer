@@ -7,6 +7,8 @@
 [![Bootstrap 5](https://img.shields.io/badge/Bootstrap-7952B3.svg?style=flat)](https://getbootstrap.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+[![Test Online](https://img.shields.io/badge/Test%20Online-Click%20Here-brightgreen?style=for-the-badge)](https://bocaletto-luca.github.io/Car-Makes-Explorer/)
+
 ## Overview
 
 **Car-Makes-Explorer** is a free and open source web application that enables users to explore car manufacturers and view detailed information on their available models. The application leverages the [CarQuery API](https://www.carqueryapi.com/)—a fully free API that requires no registration—and is built using HTML, CSS, JavaScript, and Bootstrap 5 for responsive design.
